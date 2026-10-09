@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WhatsApp Ultra Server</title>
+
+    <!-- Tailwind CSS & FontAwesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="/socket.io/socket.io.js"></script>
+
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0b0718; color: #fff; }
+
+        .cyber-card {
+            background: rgba(20, 13, 38, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        .cyber-input {
+            background: rgba(10, 5, 22, 0.95);
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            color: #fff;
+        }
+        .cyber-input:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+            outline: none;
+        }
+
+        .chat-me {
+            background: linear-gradient(135deg, #7e22ce, #6b21a8);
+            border-radius: 18px 18px 0px 18px;
+        }
+        .chat-other {
+            background: rgba(30, 20, 55, 0.9);
+            border: 1px solid rgba(168, 85, 247, 0.25);
+            border-radius: 18px 18px 18px 0px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-3 max-w-md mx-auto select-none relative pb-16">
+
+    <!-- Auth Verification Modal -->
+    <div id="authModal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="cyber-card max-w-xs w-full p-5 rounded-3xl space-y-4 text-center border-emerald-500/40">
+            <div class="w-12 h-12 bg-gradient-to-tr from-emerald-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto text-xl text-white">
+                <i class="fa-brands fa-whatsapp"></i>
+            </div>
+            
+            <h2 class="text-base font-black text-emerald-400">تفعيل رقم الواتساب Ultra</h2>
+            
+            <div id="step1" class="space-y-3">
+                <input type="text" id="phoneInput" placeholder="أدخل رقم تليفونك (مثال: 010...)" class="w-full cyber-input p-2.5 rounded-xl text-xs text-center font-mono">
+                <input type="text" id="nameInput" placeholder="اسم المستخدم..." class="w-full cyber-input p-2.5 rounded-xl text-xs text-center">
+                
+                <label class="flex items-center justify-center gap-2 text-xs text-amber-300 font-bold bg-amber-500/10 border border-amber-500/30 p-2 rounded-xl cursor-pointer">
+                    <input type="checkbox" id="premCheck" class="rounded text-amber-500">
+                    <span>حساب VIP Premium ⭐</span>
+                </label>
+
+                <button onclick="sendOtpReq()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition">
+                    إرسال كود التفعيل
+                </button>
+            </div>
+
+            <div id="step2" class="space-y-3 hidden">
+                <p class="text-xs text-purple-300">كود التفعيل الفوري الخاص بك:</p>
+                <div id="generatedOtp" class="text-2xl font-mono font-black text-amber-400 bg-amber-500/10 p-2 rounded-xl border border-amber-500/30">------</div>
+                <input type="text" id="otpConfirmInput" placeholder="أدخل الكود الظاهر أعلاه..." class="w-full cyber-input p-2.5 rounded-xl text-xs text-center font-mono">
+                <button onclick="confirmAuth()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition">
+                    تأكيد الدخول للمنصة
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Header -->
+    <header class="cyber-card p-3 rounded-2xl flex justify-between items-center border-purple-500/30">
+        <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-purple-600 flex items-center justify-center text-white text-base">
+                <i class="fa-brands fa-whatsapp"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-xs text-white">WhatsApp Ultra</h1>
+                <p class="text-[9px] text-purple-300" id="userTitle">غير مسجل</p>
+            </div>
+        </div>
+        <div class="text-[10px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-1 rounded-xl font-bold">
+            أونلاين: <span id="onlineCnt" class="font-mono">1</span>
+        </div>
+    </header>
+
+    <!-- Chat Messages Box -->
+    <div id="chatBox" class="flex-1 my-3 overflow-y-auto space-y-2.5 p-1 max-h-[68vh]">
+        <div class="text-center text-[10px] text-purple-300/50 py-10">قم بتسجيل رقمك للبدء في المحادثات المباشرة...</div>
+    </div>
+
+    <!-- Input Box -->
+    <form onsubmit="sendMsg(event)" class="cyber-card p-2 rounded-2xl flex gap-2 border-emerald-500/30">
+        <input type="text" id="msgInp" placeholder="اكتب رسالتك السحابية المشفرة..." class="w-full bg-transparent text-xs p-2 text-white outline-none">
+        <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition shrink-0">
+            إرسال
+        </button>
+    </form>
+
+    <!-- Script Logic -->
+    <script>
+        const socket = io();
+        let userObj = {};
+        let currentOtp = null;
+
+        function sendOtpReq() {
+            const phone = document.getElementById('phoneInput').value.trim();
+            const name = document.getElementById('nameInput').value.trim();
+            if (!phone || !name) return alert('يرجى أدخال الرقم والاسم!');
+
+            socket.emit('request_otp', phone);
+        }
+
+        socket.on('receive_otp', (data) => {
+            currentOtp = data.otp;
+            document.getElementById('generatedOtp').innerText = currentOtp;
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
+        });
+
+        function confirmAuth() {
+            const val = document.getElementById('otpConfirmInput').value.trim();
+            if (val == currentOtp) {
+                userObj = {
+                    phone: document.getElementById('phoneInput').value.trim(),
+                    username: document.getElementById('nameInput').value.trim(),
+                    isPremium: document.getElementById('premCheck').checked
+                };
+                socket.emit('register_user', userObj);
+                document.getElementById('authModal').classList.add('hidden');
+                document.getElementById('userTitle').innerText = userObj.username + (userObj.isPremium ? ' ⭐ VIP' : '');
+            } else {
+                alert('كود التفعيل غير صحيح!');
+            }
+        }
+
+        function sendMsg(e) {
+            e.preventDefault();
+            const txt = document.getElementById('msgInp').value.trim();
+            if (!txt || !userObj.username) return;
+
+            socket.emit('send_message', {
+                room: 'public',
+                text: txt,
+                sender: userObj.username,
+                isPremium: userObj.isPremium
+            });
+
+            document.getElementById('msgInp').value = '';
+        }
+
+        socket.on('new_message', (data) => {
+            const box = document.getElementById('chatBox');
+            const isMe = data.msg.sender === userObj.username;
+            
+            if (box.innerText.includes('قم بتسجيل رقمك')) box.innerHTML = '';
+
+            box.innerHTML += `
+                <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-0.5">
+                    <span class="text-[9px] text-purple-300 px-1">
+                        ${data.msg.sender} ${data.msg.isPremium ? '⭐ VIP' : ''}
+                    </span>
+                    <div class="${isMe ? 'chat-me' : 'chat-other'} p-3 text-xs text-white max-w-[82%] break-words shadow-md">
+                        ${escapeHtml(data.msg.text)}
+                    </div>
+                </div>
+            `;
+            box.scrollTop = box.scrollHeight;
+        });
+
+        socket.on('online_count', (count) => {
+            document.getElementById('onlineCnt').innerText = count;
+        });
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
